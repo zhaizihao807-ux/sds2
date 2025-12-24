@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b2a1d" />
-  <title>Swipe Christmas Tree + Photo Cloud (No Gesture)</title>
+  <title>Swipe Christmas Tree + Photo Cloud (Local THREE)</title>
 
   <style>
     :root{
@@ -154,8 +154,10 @@
     </div>
   </div>
 
+  <!-- ✅ 本地 three.js：请确保仓库里有 three.min.js -->
+  <script src="./three.min.js"></script>
+
   <script>
-    // ======= Robust boot (参考你之前手势成功版的思路：先确保 Three 真加载成功) =======
     const bootError = document.getElementById("bootError");
     const bootErrorMsg = document.getElementById("bootErrorMsg");
     const bootErrorDetail = document.getElementById("bootErrorDetail");
@@ -164,7 +166,6 @@
       bootErrorDetail.textContent = detail || "";
       bootError.style.display = "flex";
     }
-
     function webglOK(){
       try{
         const c = document.createElement("canvas");
@@ -173,47 +174,12 @@
       }catch{ return false; }
     }
 
-    const THREE_CDNS = [
-      "https://unpkg.com/three@0.182.0/build/three.min.js",
-      "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.min.js",
-      "https://fastly.jsdelivr.net/npm/three@0.182.0/build/three.min.js",
-    ];
-
-    (function loadThreeWithFallback(){
-      if(!webglOK()){
-        showBootError("当前浏览器/设备不支持 WebGL", "请换 Chrome/系统浏览器，或在系统设置里启用硬件加速。");
-        return;
-      }
-
-      let idx = 0;
-      function tryLoad(){
-        if(idx >= THREE_CDNS.length){
-          showBootError(
-            "Three.js 加载失败（多 CDN 均不可用）",
-            "你当前网络可能拦截了 unpkg/jsdelivr。\n\n已尝试：\n" + THREE_CDNS.join("\n") +
-            "\n\n解决：\n1) 换网络（如手机流量/不同WiFi）\n2) 或把 three.min.js 下载到仓库本地引用"
-          );
-          return;
-        }
-        const url = THREE_CDNS[idx++];
-        const s = document.createElement("script");
-        s.src = url;
-        s.crossOrigin = "anonymous";
-        s.onload = ()=>{
-          if(window.THREE) {
-            bootMain(); // ✅ 开始渲染
-          } else {
-            tryLoad();
-          }
-        };
-        s.onerror = ()=> tryLoad();
-        document.head.appendChild(s);
-      }
-      tryLoad();
-    })();
-
-    // ======= Main =======
-    function bootMain(){
+    if(!webglOK()){
+      showBootError("当前浏览器/设备不支持 WebGL", "请换 Chrome/系统浏览器，或在系统设置里启用硬件加速。");
+    }else if(!window.THREE){
+      showBootError("three.min.js 没有加载成功", "请确认 sds2 仓库根目录存在 three.min.js，并能访问 /sds2/three.min.js");
+    }else{
+      // ======= main =======
       const THREE = window.THREE;
 
       const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -238,8 +204,7 @@
       const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
       renderer.setSize(innerWidth, innerHeight);
-      if("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
-      if("toneMapping" in renderer) renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.90;
 
       const scene = new THREE.Scene();
@@ -310,8 +275,6 @@
           g.closePath(); g.fill(); g.restore();
         }
         const tex=new THREE.CanvasTexture(c);
-        if("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
-        else tex.encoding = THREE.sRGBEncoding;
         tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
         tex.repeat.set(2.4,1);
         return tex;
@@ -345,7 +308,7 @@
         return { mesh, items, tmpM:new THREE.Matrix4(), tmpV:new THREE.Vector3(), tmpE:new THREE.Euler() };
       }
 
-      // ✅ Tree body (确保一开就有东西)
+      // Tree body
       const ornamentsGold = buildInstanced({ count:220, geometry:new THREE.SphereGeometry(0.35, 16, 12), material:goldMat,  scaleRange:[0.22,0.46], spin:1.0 });
       const ornamentsRed  = buildInstanced({ count:140, geometry:new THREE.SphereGeometry(0.32, 16, 12), material:redMat,   scaleRange:[0.20,0.42], spin:1.1 });
       const cubes         = buildInstanced({ count:150, geometry:new THREE.BoxGeometry(0.6,0.6,0.6),            material:greenMat, scaleRange:[0.22,0.42], spin:0.8 });
@@ -387,7 +350,7 @@
       const star = makeStar();
       ROOT.add(star);
 
-      // Sparkles (no postprocessing, 但仍好看)
+      // Sparkles
       const particleCount = 1800;
       const pGeo = new THREE.BufferGeometry();
       const pPos = new Float32Array(particleCount*3);
@@ -456,7 +419,7 @@
 
       const PHOTO_COUNT = 20;
       const PHOTO_URLS = Array.from({length:PHOTO_COUNT}, (_,i)=>`./pic${i+1}.jpg?v=1`);
-      const PHOTO_EMISSIVE = 0.70; // 常态更亮一点（无 bloom，所以不会炸）
+      const PHOTO_EMISSIVE = 0.72;
 
       function makeProceduralPhoto(i){
         const c=document.createElement("canvas");
@@ -466,7 +429,6 @@
         grad.addColorStop(0,"#0b2a1d");
         grad.addColorStop(1,"#1f6b45");
         g.fillStyle=grad; g.fillRect(0,0,512,640);
-
         g.globalCompositeOperation="screen";
         for(let k=0;k<10;k++){
           const x=Math.random()*512, y=Math.random()*640;
@@ -486,18 +448,13 @@
         g.font="700 36px system-ui, -apple-system, Segoe UI, sans-serif";
         g.fillText("Merry", 28, 64);
         g.fillText("Christmas", 28, 108);
-
         const tex=new THREE.CanvasTexture(c);
-        if("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
-        else tex.encoding = THREE.sRGBEncoding;
         return tex;
       }
 
       function addPhotoTexture(tex){
         const aspect=4/5;
-        const w=1.25;
-        const h=w/aspect;
-
+        const w=1.25, h=w/aspect;
         const geo=new THREE.PlaneGeometry(w,h);
         const mat=new THREE.MeshPhysicalMaterial({
           map: tex,
@@ -509,7 +466,6 @@
           emissiveMap: tex,
           emissiveIntensity: PHOTO_EMISSIVE
         });
-
         const mesh=new THREE.Mesh(geo, mat);
         mesh.frustumCulled=false;
 
@@ -530,15 +486,10 @@
       function loadTexture(url){
         return new Promise((resolve, reject)=>{
           const loader = new THREE.TextureLoader();
-          loader.load(url, (t)=>{
-            if("colorSpace" in t) t.colorSpace = THREE.SRGBColorSpace;
-            else t.encoding = THREE.sRGBEncoding;
-            resolve(t);
-          }, undefined, reject);
+          loader.load(url, resolve, undefined, reject);
         });
       }
 
-      // ✅ 先占位，马上可见；再后台替换 pic1~pic20
       const holders = [];
       for(let i=0;i<PHOTO_COUNT;i++){
         holders.push(addPhotoTexture(makeProceduralPhoto(i)));
@@ -551,15 +502,13 @@
             mat.map = tex;
             mat.emissiveMap = tex;
             mat.needsUpdate = true;
-          }catch{
-            // 保留占位
-          }
+          }catch{}
         }
       })();
 
       // Modes
       const MODE = { CONE:"CONE", SCATTER:"SCATTER", PHOTO:"PHOTO" };
-      let mode = MODE.CONE; // ✅ 默认树形，保证一打开就看到
+      let mode = MODE.CONE;
       let selectedPhoto = null;
 
       function setMode(next, opts={}){
@@ -590,7 +539,6 @@
             it.tq.setFromEuler(pack.tmpE);
           }
         }
-
         for(const ph of photoPlanes){
           if(mode === MODE.CONE){
             ph.tp.copy(ph.coneP);
@@ -615,7 +563,7 @@
         }
       });
 
-      // Orbit control (swipe + pinch)
+      // Orbit control
       const orbit = { theta: 0, phi: 1.10, r: 14, tTheta: 0, tPhi: 1.10, tR: 14 };
       function updateCamera(dt){
         orbit.theta = damp(orbit.theta, orbit.tTheta, 10, dt);
@@ -688,7 +636,6 @@
         pointers.delete(e.pointerId);
         if(pointers.size<2) lastPinchDist = null;
 
-        // tap = select photo
         const elapsed = performance.now() - downTime;
         if(elapsed < 280 && dragMoved < 10){
           trySelectAt(e.clientX, e.clientY);
@@ -700,12 +647,9 @@
         if(pointers.size<2) lastPinchDist = null;
       }, {passive:true});
 
-      addEventListener("wheel", (e)=>{
-        orbit.tR += e.deltaY * 0.008;
-        orbit.tR = clamp(orbit.tR, 10.5, 18.5);
-      }, {passive:true});
-
-      // Select photo
+      // select photo
+      const ray = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
       function trySelectAt(x,y){
         if(photoPlanes.length===0) return;
         ndc.set((x/innerWidth)*2 - 1, -(y/innerHeight)*2 + 1);
@@ -732,21 +676,19 @@
         }
       }
 
-      // Animation
+      // animation
       const clock = new THREE.Clock();
 
       function updateInstanced(pack, dt){
         const m=pack.mesh, items=pack.items, tmpM=pack.tmpM, tmpV=pack.tmpV;
         for(let i=0;i<items.length;i++){
           const it=items[i];
-
           if(mode !== MODE.CONE){
             const t = clock.elapsedTime*0.55 + it.seed;
             it.tp.x += Math.sin(t*0.9) * 0.0016;
             it.tp.z += Math.cos(t*0.8) * 0.0016;
             it.tp.y += Math.sin(t*0.6) * 0.0010;
           }
-
           it.p.lerp(it.tp, 1 - Math.exp(-dt*8.5));
           it.q.slerp(it.tq, 1 - Math.exp(-dt*7.0));
           const spin = it.spin * dt * 0.7;
@@ -765,7 +707,7 @@
           }else if(mode === MODE.SCATTER){
             ph.tp.copy(ph.scatterP);
             ph.ts = 1.0;
-          }else if(mode === MODE.PHOTO){
+          }else{
             if(ph === selectedPhoto){
               const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion).normalize();
               ph.tp.copy(camera.position.clone().add(fwd.multiplyScalar(3.2)));
@@ -790,7 +732,6 @@
             ph.mesh.lookAt(camera.position);
           }
 
-          // 放大不额外加亮
           ph.mesh.material.emissiveIntensity = PHOTO_EMISSIVE;
         }
       }
@@ -804,7 +745,6 @@
       function tick(){
         const dt = Math.min(0.033, clock.getDelta());
 
-        // slight sway
         if(mode !== MODE.CONE){
           ROOT.rotation.y = damp(ROOT.rotation.y, Math.sin(clock.elapsedTime*0.15)*0.10, 2.5, dt);
         }else{
@@ -838,7 +778,7 @@
       }
       addEventListener("resize", resize);
 
-      // Start
+      // start
       retargetAll();
       resize();
       showToast("已启动：拖动旋转｜双指缩放｜点照片放大", 2.0);
