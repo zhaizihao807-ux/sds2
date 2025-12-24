@@ -1034,14 +1034,33 @@
     // 点击照片放大（两种模式都可用）
     addEventListener("pointerdown", (e)=>{
       if(!photoPlanes.length) return;
+    
+      // 屏幕坐标 -> NDC
       photoNDC.set((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
       photoRay.setFromCamera(photoNDC, camera);
+    
       const hits = photoRay.intersectObjects(photoPlanes.map(p=>p.mesh), false);
+    
       if(hits.length){
-        const ph = photoPlanes.find(p=>p.mesh===hits[0].object);
-        if(ph) setState(STATE.PHOTO, {photo: ph});
+        const ph = photoPlanes.find(p=>p.mesh === hits[0].object);
+        if(!ph) return;
+    
+        // ✅ 如果当前已经放大且点的是同一张：收回
+        if(state === STATE.PHOTO && selectedPhoto === ph){
+          setState(STATE.SCATTER);
+          return;
+        }
+    
+        // ✅ 点到其它照片：切换放大那张
+        setState(STATE.PHOTO, { photo: ph });
+      }else{
+        // ✅ 点空白区域：如果正在放大，就收回
+        if(state === STATE.PHOTO){
+          setState(STATE.SCATTER);
+        }
       }
     });
+
 
     addEventListener("keydown", (e)=>{
       if(e.key === "1") setState(STATE.CONE);
